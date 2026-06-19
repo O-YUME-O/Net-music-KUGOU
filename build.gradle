@@ -1,0 +1,121 @@
+buildscript {
+    repositories {
+        maven { url = 'https://maven.minecraftforge.net' }
+        maven { url = 'https://maven.parchmentmc.org' }
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    dependencies {
+        classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '[6.0.16,6.2)'
+        classpath 'org.parchmentmc:librarian:1.+'
+        classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT'
+    }
+}
+
+apply plugin: 'net.minecraftforge.gradle'
+// 暂时禁用 Parchment plugin，避免它覆盖 mojang official 的 mcp 数字名（m_xxxxx_）
+// apply plugin: 'org.parchmentmc.librarian.forgegradle'
+apply plugin: 'org.spongepowered.mixin'
+apply plugin: 'eclipse'
+apply plugin: 'java'
+
+version = '1.0.0-forge+mc1.20.1'
+group = 'com.github.tartaricacid'
+archivesBaseName = 'netmusic_echo_addon'
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+minecraft {
+    // Mojang official 1.20.1 mappings 中 BlockBehaviour.Properties.of() 的 mcp 名是 m_284310_（srg 数字名）
+    mappings channel: 'official', version: '1.20.1'
+    runs {
+        client {
+            workingDirectory project.file('run/client')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            property 'fml.earlyprogresswindow', 'false'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToSrg/output.srg"
+            mods {
+                netmusic_echo_addon { source sourceSets.main }
+            }
+        }
+        server {
+            workingDirectory project.file('run/server')
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToSrg/output.srg"
+            mods {
+                netmusic_echo_addon { source sourceSets.main }
+            }
+        }
+    }
+}
+
+mixin {
+    add sourceSets.main, "${archivesBaseName}.refmap.json"
+    config "${archivesBaseName}.mixins.json"
+}
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+    maven {
+        name = "Modrinth"
+        url = "https://api.modrinth.com/maven"
+    }
+    maven { url = "https://maven.shedaniel.me" }
+}
+
+dependencies {
+    // 与运行时一致：用户环境是 forge 47.4.20，编译用同版本避免 API 差异
+    minecraft 'net.minecraftforge:forge:1.20.1-47.4.20'
+    implementation fg.deobf("maven.modrinth:net-music:1.5.1-forge+mc1.20.1")
+    // TLM 显式依赖：用于在 Mixin 中引用 LyricChatBubbleData / EntityMaid 等
+    implementation fg.deobf("maven.modrinth:touhou-little-maid:1.5.2-forge+mc1.20.1")
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    implementation fg.deobf("me.shedaniel.cloth:cloth-config-forge:11.1.136")
+    // 编译期需要Nayuki QR库
+    implementation files('nayuki_extract')
+}
+
+processResources {
+    inputs.property 'version', project.version
+    inputs.property 'mcversion', project.version
+
+    filesMatching('META-INF/mods.toml') {
+        expand 'version': project.version, 'mcversion': project.version
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+// 将Nayuki QR库的class文件直接打入mod JAR
+jar {
+    from('nayuki_extract') {
+        include 'io/nayuki/qrcodegen/*.class'
+        exclude 'module-info.class'
+    }
+}
+
+// 自动复制 reobf 后的 JAR 到 PCL2 mods 目录（开发用）
+// 必须在游戏未运行时执行；PCL2 launcher 会 lock mods 目录中的 jar
+tasks.register('copyToMods') {
+    dependsOn 'reobfJar'
+    doLast {
+        def target = 'D:\\pcl ce\\.minecraft\\versions\\1.20.1\\mods\\netmusic_echo_addon-1.0.0-forge+mc1.20.1.jar'
+        def source = file("$buildDir/reobfJar/output.jar")
+        if (source.exists()) {
+            try {
+                ant.copy(file: source.absolutePath, tofile: target, overwrite: true)
+                println "[EchoAddon] Copied reobf JAR to $target (${source.length()} bytes)"
+            } catch (Exception e) {
+                println "[EchoAddon] WARN: Failed to copy to mods (probably locked by PCL2): ${e.message}"
+            }
+        }
+    }
+}

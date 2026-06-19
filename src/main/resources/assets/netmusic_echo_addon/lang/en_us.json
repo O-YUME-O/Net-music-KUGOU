@@ -1,0 +1,11 @@
+
+{
+  "itemGroup.netmusic_echo_addon": "NetMusic Echo Addon",
+  "gui.netmusic_echo_addon.echo_tab": "KuGou Music",
+  "gui.netmusic_echo_addon.search": "Search",
+  "gui.netmusic_echo_addon.burn": "Burn",
+  "gui.netmusic_echo_addon.searching": "Searching...",
+  "gui.netmusic_echo_addon.burning": "Burning...",
+  "gui.netmusic_echo_addon.no_selection": "Please select a song first",
+  "gui.netmusic_echo_addon.no_url": "Cannot get song URL"
+}
