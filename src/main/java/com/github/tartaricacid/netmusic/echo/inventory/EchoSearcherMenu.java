@@ -2,7 +2,6 @@
 package com.github.tartaricacid.netmusic.echo.inventory;
 
 import com.github.tartaricacid.netmusic.echo.init.InitContainer;
-import com.github.tartaricacid.netmusic.echo.network.message.EchoBurnMessage;
 import com.github.tartaricacid.netmusic.init.InitItems;
 import com.github.tartaricacid.netmusic.item.ItemMusicCD;
 import net.minecraft.world.entity.player.Inventory;

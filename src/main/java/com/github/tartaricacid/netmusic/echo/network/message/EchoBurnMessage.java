@@ -1,5 +1,3 @@
-
-
 package com.github.tartaricacid.netmusic.echo.network.message;
 
 import com.github.tartaricacid.netmusic.echo.EchoLogger;
@@ -8,85 +6,88 @@ import com.github.tartaricacid.netmusic.echo.api.KuGouApiClient;
 import com.github.tartaricacid.netmusic.echo.inventory.EchoSearcherMenu;
 import com.github.tartaricacid.netmusic.echo.support.CdNbtHelper;
 import com.github.tartaricacid.netmusic.item.ItemMusicCD;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.network.NetworkEvent;
-import net.minecraftforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
-import java.util.function.Supplier;
+/**
+ * 客户端 → 服务端：酷狗 CD 烧录。
+ * <p>
+ * 1.20.1 父 mod 的 {@code ItemMusicCD.SongInfo.serializeNBT} / {@code deserializeNBT}
+ * 在 1.21.1 已删除（DataComponent 化），新版本用
+ * {@link ItemMusicCD.SongInfo#STREAM_CODEC} 直接做流编解码。
+ * 该 codec 是 {@code StreamCodec<ByteBuf, SongInfo>}，而我们的 payload 走
+ * {@code RegistryFriendlyByteBuf}，运行期是兼容的，做一个 raw cast 即可。
+ */
+public record EchoBurnMessage(
+        ItemMusicCD.SongInfo song,
+        String fileHash,
+        String albumId
+) implements CustomPacketPayload {
 
-public class EchoBurnMessage {
-    public final ItemMusicCD.SongInfo song;
-    public final String fileHash;
-    public final String albumId;
+    public static final Type<EchoBurnMessage> TYPE =
+            new Type<>(ResourceLocation.fromNamespaceAndPath(NetMusicEchoAddon.MOD_ID, "echo_burn"));
 
-    public EchoBurnMessage(ItemMusicCD.SongInfo song, String fileHash, String albumId) {
-        this.song = song;
-        this.fileHash = fileHash;
-        this.albumId = albumId;
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static final StreamCodec<RegistryFriendlyByteBuf, ItemMusicCD.SongInfo> SONG_INFO_CODEC =
+            (StreamCodec) ItemMusicCD.SongInfo.STREAM_CODEC;
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, EchoBurnMessage> STREAM_CODEC = StreamCodec.composite(
+            SONG_INFO_CODEC, EchoBurnMessage::song,
+            ByteBufCodecs.STRING_UTF8, EchoBurnMessage::fileHash,
+            ByteBufCodecs.STRING_UTF8, EchoBurnMessage::albumId,
+            EchoBurnMessage::new
+    );
+
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
     }
 
-    public static EchoBurnMessage decode(FriendlyByteBuf buf) {
-        CompoundTag tag = buf.readNbt();
-        ItemMusicCD.SongInfo songData = ItemMusicCD.SongInfo.deserializeNBT(tag);
-        String fileHash = buf.readUtf();
-        String albumId = buf.readUtf();
-        return new EchoBurnMessage(songData, fileHash, albumId);
-    }
-
-    public static void encode(EchoBurnMessage message, FriendlyByteBuf buf) {
-        CompoundTag tag = new CompoundTag();
-        ItemMusicCD.SongInfo.serializeNBT(message.song, tag);
-        buf.writeNbt(tag);
-        buf.writeUtf(message.fileHash);
-        buf.writeUtf(message.albumId);
-    }
-
-    public static void handle(EchoBurnMessage message, Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
+    public static void handle(EchoBurnMessage message, IPayloadContext context) {
+        if (!context.flow().isServerbound()) {
+            return;
+        }
         context.enqueueWork(() -> {
-            if (context.getDirection().getReceptionSide().isServer()) {
-                var player = context.getSender();
-                if (player != null && player.containerMenu instanceof EchoSearcherMenu menu) {
-                    try {
-                        // 同步等待获取歌曲 URL
-                        String url = KuGouApiClient.getSongUrl(message.fileHash, message.albumId).get();
-                        if (url != null && !url.isEmpty()) {
-                            message.song.songUrl = url;
-                            menu.burnCD(message.song);
-
-                            // 把原曲识别信息（fileHash / albumId）写到 CD 物品 NBT，
-                            // 这样 UrlRefresher 在 URL 过期时能自动续期。
-                            ItemStack burnedCd = menu.getOutput().getStackInSlot(0);
-                            if (CdNbtHelper.isMusicCd(burnedCd)) {
-                                CdNbtHelper.writeOriginalInfo(burnedCd, message.fileHash, message.albumId);
-                                EchoLogger.info("EchoBurnMessage: stored fileHash={} on burned CD for future URL refresh", message.fileHash);
-
-                                // 拉取歌词并写入 CD NBT（不阻塞刻录主流程；失败仅记日志）
-                                fetchAndStoreLyric(burnedCd, message);
-                            } else {
-                                EchoLogger.error("Failed to get song URL for hash: {}", message.fileHash);
-                            }
-                        } else {
-                            EchoLogger.error("Failed to get song URL for hash: {}", message.fileHash);
-                        }
-                    } catch (Exception e) {
-                        EchoLogger.error("Failed to burn CD", e);
-                    }
+            if (!(context.player() instanceof net.minecraft.server.level.ServerPlayer player)) {
+                return;
+            }
+            if (!(player.containerMenu instanceof EchoSearcherMenu menu)) {
+                return;
+            }
+            try {
+                String url = KuGouApiClient.getSongUrl(message.fileHash, message.albumId).get();
+                if (url == null || url.isEmpty()) {
+                    EchoLogger.error("Failed to get song URL for hash: {}", message.fileHash);
+                    return;
                 }
+                message.song.songUrl = url;
+                menu.burnCD(message.song);
+
+                ItemStack burnedCd = menu.getOutput().getStackInSlot(0);
+                if (CdNbtHelper.isMusicCd(burnedCd)) {
+                    CdNbtHelper.writeOriginalInfo(burnedCd, message.fileHash, message.albumId);
+                    EchoLogger.info("EchoBurnMessage: stored fileHash={} on burned CD for future URL refresh", message.fileHash);
+                    fetchAndStoreLyric(burnedCd, message);
+                } else {
+                    EchoLogger.error("Failed to get song URL for hash: {}", message.fileHash);
+                }
+            } catch (Exception e) {
+                EchoLogger.error("Failed to burn CD", e);
             }
         });
-        context.setPacketHandled(true);
     }
 
     /**
-     * 拉取歌词并写入 CD NBT。整个流程是 best-effort，
+     * 拉取歌词并写入 CD DataComponent。best-effort，
      * 任何步骤失败都只打日志不抛异常，避免影响主刻录流程。
      */
     private static void fetchAndStoreLyric(ItemStack burnedCd, EchoBurnMessage message) {
         try {
-            // 搜索关键字：尽量 "歌手 - 歌名" 形式，命中率最高
             String singer = (message.song.artists == null || message.song.artists.isEmpty())
                     ? ""
                     : String.join(", ", message.song.artists);
@@ -95,7 +96,6 @@ public class EchoBurnMessage {
             if (keyword.isEmpty()) {
                 return;
             }
-            // songTime 是秒，酷狗 search_lyric 期望毫秒
             int duration = message.song.songTime * 1000;
 
             KuGouApiClient.LyricCandidate candidate = KuGouApiClient
@@ -107,7 +107,6 @@ public class EchoBurnMessage {
                 return;
             }
 
-            // 先用 lrc 抓一份最轻量的；拿不到再尝试 krc
             KuGouApiClient.LyricContent content = KuGouApiClient
                     .getLyric(candidate.id, candidate.accessKey, "lrc")
                     .get();
