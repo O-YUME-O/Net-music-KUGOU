@@ -67,7 +67,7 @@ public class EchoSearcherScreen extends AbstractContainerScreen<EchoSearcherMenu
     private void performSearch() {
         String keyword = this.searchBox.getValue();
         if (!keyword.isEmpty()) {
-            NetworkHandler.CHANNEL.sendToServer(new EchoSearchMessage(keyword, 1));
+            NetworkHandler.sendToServer(new EchoSearchMessage(keyword, 1));
             this.tips = Component.translatable("gui.netmusic_echo_addon.searching");
             this.selectedIndex = -1;
         }
@@ -77,7 +77,7 @@ public class EchoSearcherScreen extends AbstractContainerScreen<EchoSearcherMenu
         int newPage = Math.max(1, this.menu.getCurrentPage() - 1);
         String keyword = this.searchBox.getValue();
         if (!keyword.isEmpty()) {
-            NetworkHandler.CHANNEL.sendToServer(new EchoSearchMessage(keyword, newPage));
+            NetworkHandler.sendToServer(new EchoSearchMessage(keyword, newPage));
             this.selectedIndex = -1;
         }
     }
@@ -86,7 +86,7 @@ public class EchoSearcherScreen extends AbstractContainerScreen<EchoSearcherMenu
         int newPage = this.menu.getCurrentPage() + 1;
         String keyword = this.searchBox.getValue();
         if (!keyword.isEmpty()) {
-            NetworkHandler.CHANNEL.sendToServer(new EchoSearchMessage(keyword, newPage));
+            NetworkHandler.sendToServer(new EchoSearchMessage(keyword, newPage));
             this.selectedIndex = -1;
         }
     }
@@ -94,7 +94,7 @@ public class EchoSearcherScreen extends AbstractContainerScreen<EchoSearcherMenu
     private void burnSelected() {
         if (selectedIndex >= 0 && selectedIndex < menu.getSearchResults().size()) {
             EchoSearcherMenu.SearchResult result = menu.getSearchResults().get(selectedIndex);
-            
+
             ItemMusicCD.SongInfo songInfo = new ItemMusicCD.SongInfo();
             songInfo.songName = result.songName;
             songInfo.songTime = result.duration;
@@ -102,8 +102,8 @@ public class EchoSearcherScreen extends AbstractContainerScreen<EchoSearcherMenu
             if (StringUtils.isNotBlank(result.albumName)) {
                 songInfo.transName = result.albumName;
             }
-            
-            NetworkHandler.CHANNEL.sendToServer(new EchoBurnMessage(songInfo, result.fileHash, result.albumId));
+
+            NetworkHandler.sendToServer(new EchoBurnMessage(songInfo, result.fileHash, result.albumId));
             this.tips = Component.translatable("gui.netmusic_echo_addon.burning");
         } else {
             this.tips = Component.translatable("gui.netmusic_echo_addon.no_selection");

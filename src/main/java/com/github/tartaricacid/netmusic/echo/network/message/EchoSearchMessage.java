@@ -1,5 +1,3 @@
-
-
 package com.github.tartaricacid.netmusic.echo.network.message;
 
 import com.github.tartaricacid.netmusic.echo.EchoLogger;
@@ -9,109 +7,115 @@ import com.github.tartaricacid.netmusic.echo.echo.EchoMusicApi;
 import com.github.tartaricacid.netmusic.echo.inventory.EchoSearcherMenu;
 import com.github.tartaricacid.netmusic.echo.client.gui.EchoSearchScreen;
 import com.github.tartaricacid.netmusic.echo.network.NetworkHandler;
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
-import net.minecraft.nbt.Tag;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.network.NetworkEvent;
-import net.minecraftforge.network.PacketDistributor;
+import io.netty.buffer.ByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Supplier;
 
-public class EchoSearchMessage {
-    public final String keyword;
-    public final int page;
-    public final List<EchoSearcherMenu.SearchResult> results;
+/**
+ * 客户端 ↔ 服务端：酷狗音乐搜索结果传输。
+ * <p>
+ * 客户端 → 服务端：携带 keyword + page，results 为空列表。
+ * 服务端 → 客户端：携带 keyword + page + 搜索结果列表。
+ */
+public record EchoSearchMessage(
+        String keyword,
+        int page,
+        List<EchoSearcherMenu.SearchResult> results
+) implements CustomPacketPayload {
 
-    public EchoSearchMessage(String keyword, int page, List<EchoSearcherMenu.SearchResult> results) {
-        this.keyword = keyword;
-        this.page = page;
-        this.results = results;
-    }
+    public static final Type<EchoSearchMessage> TYPE =
+            new Type<>(ResourceLocation.fromNamespaceAndPath(NetMusicEchoAddon.MOD_ID, "echo_search"));
 
+    /**
+     * 简化构造器：客户端发起搜索时用，results 默认空。
+     */
     public EchoSearchMessage(String keyword, int page) {
         this(keyword, page, new ArrayList<>());
     }
 
-    public static EchoSearchMessage decode(FriendlyByteBuf buf) {
-        String keyword = buf.readUtf();
-        int page = buf.readInt();
-        List<EchoSearcherMenu.SearchResult> results = new ArrayList<>();
-        if (buf.readBoolean()) {
-            ListTag tagList = buf.readNbt().getList("results", Tag.TAG_COMPOUND);
-            for (int i = 0; i < tagList.size(); i++) {
-                CompoundTag resultTag = tagList.getCompound(i);
-                results.add(new EchoSearcherMenu.SearchResult(
-                        resultTag.getString("songName"),
-                        resultTag.getString("singerName"),
-                        resultTag.getString("albumName"),
-                        resultTag.getInt("duration"),
-                        resultTag.getString("songUrl"),
-                        resultTag.getString("fileHash"),
-                        resultTag.getString("albumId")
-                ));
-            }
-        }
-        return new EchoSearchMessage(keyword, page, results);
+    /**
+     * 单条 {@link EchoSearcherMenu.SearchResult} 的编解码器。
+     * 7 个字段全部为 String/INT，逐个写最直观，避免 NBT 开销。
+     */
+    public static final StreamCodec<ByteBuf, EchoSearcherMenu.SearchResult> SEARCH_RESULT_CODEC =
+            StreamCodec.of(
+                    (buf, r) -> {
+                        ByteBufCodecs.STRING_UTF8.encode(buf, r.songName);
+                        ByteBufCodecs.STRING_UTF8.encode(buf, r.singerName);
+                        ByteBufCodecs.STRING_UTF8.encode(buf, r.albumName);
+                        ByteBufCodecs.VAR_INT.encode(buf, r.duration);
+                        ByteBufCodecs.STRING_UTF8.encode(buf, r.songUrl);
+                        ByteBufCodecs.STRING_UTF8.encode(buf, r.fileHash);
+                        ByteBufCodecs.STRING_UTF8.encode(buf, r.albumId);
+                    },
+                    buf -> new EchoSearcherMenu.SearchResult(
+                            ByteBufCodecs.STRING_UTF8.decode(buf),
+                            ByteBufCodecs.STRING_UTF8.decode(buf),
+                            ByteBufCodecs.STRING_UTF8.decode(buf),
+                            ByteBufCodecs.VAR_INT.decode(buf),
+                            ByteBufCodecs.STRING_UTF8.decode(buf),
+                            ByteBufCodecs.STRING_UTF8.decode(buf),
+                            ByteBufCodecs.STRING_UTF8.decode(buf)
+                    )
+            );
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public static final StreamCodec<RegistryFriendlyByteBuf, List<EchoSearcherMenu.SearchResult>> SEARCH_RESULT_LIST_CODEC =
+            (StreamCodec) ByteBufCodecs.list(SEARCH_RESULT_CODEC);
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, EchoSearchMessage> STREAM_CODEC = StreamCodec.composite(
+            ByteBufCodecs.STRING_UTF8, EchoSearchMessage::keyword,
+            ByteBufCodecs.VAR_INT, EchoSearchMessage::page,
+            SEARCH_RESULT_LIST_CODEC, EchoSearchMessage::results,
+            EchoSearchMessage::new
+    );
+
+    @Override
+    public Type<? extends CustomPacketPayload> type() {
+        return TYPE;
     }
 
-    public static void encode(EchoSearchMessage message, FriendlyByteBuf buf) {
-        buf.writeUtf(message.keyword);
-        buf.writeInt(message.page);
-        buf.writeBoolean(!message.results.isEmpty());
-        if (!message.results.isEmpty()) {
-            CompoundTag tag = new CompoundTag();
-            ListTag tagList = new ListTag();
-            for (EchoSearcherMenu.SearchResult result : message.results) {
-                CompoundTag resultTag = new CompoundTag();
-                resultTag.putString("songName", result.songName);
-                resultTag.putString("singerName", result.singerName);
-                resultTag.putString("albumName", result.albumName);
-                resultTag.putInt("duration", result.duration);
-                resultTag.putString("songUrl", result.songUrl);
-                resultTag.putString("fileHash", result.fileHash);
-                resultTag.putString("albumId", result.albumId);
-                tagList.add(resultTag);
-            }
-            tag.put("results", tagList);
-            buf.writeNbt(tag);
-        }
-    }
-
-    public static void handle(EchoSearchMessage message, Supplier<NetworkEvent.Context> contextSupplier) {
-        NetworkEvent.Context context = contextSupplier.get();
-        context.enqueueWork(() -> {
-            if (context.getDirection().getReceptionSide().isServer()) {
-                var player = context.getSender();
-                if (player != null) {
-                    try {
-                        // 同步等待搜索结果（在服务器主线程上安全调用）
-                        List<EchoMusicApi.Song> songs = KuGouApiClient.search(message.keyword, message.page, 10).get();
-                        List<EchoSearcherMenu.SearchResult> results = new ArrayList<>();
-                        for (EchoMusicApi.Song song : songs) {
-                            results.add(new EchoSearcherMenu.SearchResult(
-                                    song.name, song.singer, song.album, song.duration,
-                                    "",
-                                    song.hash != null ? song.hash : "",
-                                    song.albumId != null ? song.albumId : ""
-                            ));
-                        }
-                        NetworkHandler.CHANNEL.send(
-                                PacketDistributor.PLAYER.with(() -> player),
-                                new EchoSearchMessage(message.keyword, message.page, results));
-                    } catch (Exception e) {
-                        EchoLogger.error("Failed to search songs", e);
-                    }
+    /**
+     * 处理函数：服务端执行搜索并回复；客户端把结果喂给 {@link EchoSearchScreen}。
+     */
+    public static void handle(EchoSearchMessage message, IPayloadContext context) {
+        if (context.flow().isServerbound()) {
+            // 客户端 → 服务端：发起搜索
+            context.enqueueWork(() -> {
+                if (!(context.player() instanceof net.minecraft.server.level.ServerPlayer player)) {
+                    return;
                 }
-            } else {
+                try {
+                    List<EchoMusicApi.Song> songs = KuGouApiClient.search(message.keyword, message.page, 10).get();
+                    List<EchoSearcherMenu.SearchResult> results = new ArrayList<>();
+                    for (EchoMusicApi.Song song : songs) {
+                        results.add(new EchoSearcherMenu.SearchResult(
+                                song.name, song.singer, song.album, song.duration,
+                                "",
+                                song.hash != null ? song.hash : "",
+                                song.albumId != null ? song.albumId : ""
+                        ));
+                    }
+                    NetworkHandler.sendToPlayer(player, new EchoSearchMessage(message.keyword, message.page, results));
+                } catch (Exception e) {
+                    EchoLogger.error("Failed to search songs", e);
+                }
+            });
+        } else {
+            // 服务端 → 客户端：填到屏幕
+            context.enqueueWork(() -> {
                 var screen = net.minecraft.client.Minecraft.getInstance().screen;
                 if (screen instanceof EchoSearchScreen searchScreen) {
                     searchScreen.setSearchResults(message.results);
                 }
-            }
-        });
-        context.setPacketHandled(true);
+            });
+        }
     }
 }

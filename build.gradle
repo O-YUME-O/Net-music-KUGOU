@@ -3,7 +3,7 @@ plugins {
     id 'eclipse'
     id 'idea'
     id 'maven-publish'
-    id 'net.neoforged.moddev' version '1.0.27'
+    id 'net.neoforged.moddev' version '1.0.14'
 }
 
 version = '1.0.0-neoforge+mc1.21.1'
