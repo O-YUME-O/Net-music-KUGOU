@@ -11,6 +11,7 @@ import com.github.tartaricacid.netmusic.echo.config.EchoConfig;
 import com.github.tartaricacid.netmusic.echo.config.ProviderType;
 import com.github.tartaricacid.netmusic.echo.init.InitBlocks;
 import com.github.tartaricacid.netmusic.echo.init.InitContainer;
+import com.github.tartaricacid.netmusic.echo.init.InitDataComponent;
 import com.github.tartaricacid.netmusic.echo.init.InitItems;
 import com.github.tartaricacid.netmusic.echo.network.NetworkHandler;
 import com.google.gson.Gson;
@@ -21,18 +22,24 @@ import me.shedaniel.clothconfig2.api.ConfigEntryBuilder;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.client.ConfigScreenHandler;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.fml.ModList;
-import net.minecraftforge.fml.ModLoadingContext;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.config.ModConfig;
-import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
-import net.minecraftforge.fml.loading.FMLEnvironment;
-import net.minecraftforge.fml.loading.FMLPaths;
-import com.github.tartaricacid.netmusic.echo.EchoLogger;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModList;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.neoforged.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.fml.loading.FMLPaths;
+import net.neoforged.neoforge.client.ConfigScreenHandler;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -43,6 +50,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 @Mod(NetMusicEchoAddon.MOD_ID)
+@EventBusSubscriber(modid = NetMusicEchoAddon.MOD_ID)
 public class NetMusicEchoAddon {
     public static final String MOD_ID = "netmusic_echo_addon";
 
@@ -80,8 +88,9 @@ public class NetMusicEchoAddon {
      */
     private ScheduledExecutorService urlRefreshScheduler;
 
-    public NetMusicEchoAddon() {
-        IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+    public NetMusicEchoAddon(IEventBus modEventBus, ModContainer modContainer) {
+        // 1.21.1 入口：构造器接收 IEventBus 和 ModContainer
+        // 与 1.20.1 的 FMLJavaModLoadingContext.get().getModEventBus() 等价
 
         // 初始化独立日志系统
         EchoLogger.init();
@@ -93,18 +102,26 @@ public class NetMusicEchoAddon {
             EchoLogger.error("Failed to create config dir: {}", e.getMessage());
         }
 
-        ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, ClientConfig.SPEC, "NETMUSICCANNEEDKUGOU/netmusic-echo-addon-client.toml");
+        // 1.21.1 用 modContainer.registerConfig 替代 ModLoadingContext.get().registerConfig
+        modContainer.registerConfig(ModConfig.Type.CLIENT, ClientConfig.SPEC, "NETMUSICCANNEEDKUGOU/netmusic-echo-addon-client.toml");
 
+        // 注册 DeferredRegister
         InitBlocks.init(modEventBus);
         InitItems.init(modEventBus);
         InitContainer.init(modEventBus);
+        InitDataComponent.DATA_COMPONENT_TYPES.register(modEventBus);
 
+        // 网络包注册（1.21.1 通过 RegisterPayloadHandlersEvent）
+        modEventBus.addListener(NetworkHandler::register);
+
+        // FMLCommonSetupEvent 仍在 modEventBus 上分发
         modEventBus.addListener(this::setup);
 
-        MinecraftForge.EVENT_BUS.register(this);
+        // 订阅游戏事件（不是 mod 生命周期事件）
+        NeoForge.EVENT_BUS.register(this);
 
         if (FMLEnvironment.dist.isClient() && ModList.get().isLoaded("cloth_config")) {
-            ModLoadingContext.get().registerExtensionPoint(ConfigScreenHandler.ConfigScreenFactory.class,
+            modContainer.registerExtensionPoint(ConfigScreenHandler.ConfigScreenFactory.class,
                     () -> new ConfigScreenHandler.ConfigScreenFactory(this::createConfigScreen));
             EchoLogger.info("EchoConfig screen registered with ClothConfig!");
         }
@@ -128,10 +145,7 @@ public class NetMusicEchoAddon {
         ConfigBuilder builder = ConfigBuilder.create()
                 .setParentScreen(parent)
                 .setTitle(Component.literal("Echo Music Config"))
-                .setSavingRunnable(() -> {
-                    // 保存 ForgeConfigSpec 配置（ClothConfig 已自动写入）
-                    ClientConfig.SPEC.save();
-                });
+                .setSavingRunnable(ClientConfig.SPEC::save);
 
         ConfigEntryBuilder entryBuilder = builder.entryBuilder();
 
@@ -198,7 +212,6 @@ public class NetMusicEchoAddon {
                 .setSaveConsumer(ClientConfig.VIP_RETRY_INTERVAL_MINUTES::set)
                 .build());
 
-        // 状态描述
         StringBuilder statusBuilder = new StringBuilder();
         statusBuilder.append("上次状态: ").append(KuGouVipApi.lastClaimStatus);
         if (!KuGouVipApi.lastClaimDate.isEmpty()) {
@@ -222,7 +235,6 @@ public class NetMusicEchoAddon {
         // ========== 分类 4：歌词显示 ==========
         ConfigCategory lyricCat = builder.getOrCreateCategory(Component.literal("歌词显示"));
 
-        // 顶部说明 + ASCII 例图
         lyricCat.addEntry(entryBuilder.startTextDescription(Component.literal(
                 "控制歌词翻译 / 罗马音（音译）的显示。\n"
                         + "方块音响、女仆气泡共用这两个开关。\n"
@@ -260,8 +272,6 @@ public class NetMusicEchoAddon {
 
     private void setup(FMLCommonSetupEvent event) {
         event.enqueueWork(() -> {
-            NetworkHandler.init();
-
             // 从配置文件加载持久化的登录状态
             loadState();
 
@@ -270,8 +280,6 @@ public class NetMusicEchoAddon {
                     .thenAccept(ready -> {
                         EchoLogger.info("Device registration: {}", ready ? "success" : "failed");
 
-                        // 注意：自动领取的"首次触发"已迁移到 onClientLoggingIn（玩家进世界时）。
-                        // 这里只启动周期重试调度器，留作兜底（按配置间隔持续轮询）。
                         if (ready && ClientConfig.AUTO_RECEIVE_VIP.get() && EchoConfig.isLoggedIn()) {
                             startVipRetryScheduler();
                         }
@@ -283,18 +291,10 @@ public class NetMusicEchoAddon {
 
     /**
      * 客户端进入世界（加入 singleplayer / 多人服）时立即触发一次 VIP 领取。
-     * <p>
-     * 触发时机：在 {@link net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingIn}
-     * 之后立刻调一次领取 + 升级（与 EchoMusic 的"每次开客户端都问一次 server"思路一致）。
-     * <p>
-     * 配合 {@link KuGouVipApi#shouldRetryToday()} 避免对服务端刷请求：
-     * - 当天已经 SUCCESS → 不调
-     * - 当前正在 IN_PROGRESS → 不调
-     * - 其他状态 → 调一次
      */
-    @net.minecraftforge.eventbus.api.SubscribeEvent
-    public void onClientLoggingIn(net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingIn event) {
-        if (!net.minecraftforge.fml.loading.FMLEnvironment.dist.isClient()) {
+    @SubscribeEvent
+    public void onClientLoggingIn(net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingIn event) {
+        if (!FMLEnvironment.dist.isClient()) {
             return;
         }
         if (!ClientConfig.AUTO_RECEIVE_VIP.get()) {
@@ -304,32 +304,18 @@ public class NetMusicEchoAddon {
             return;
         }
         if (!KuGouVipApi.shouldRetryToday()) {
-            return;  // 今天已经 SUCCESS 或正在 IN_PROGRESS，跳过
+            return;
         }
         EchoLogger.info("[NetMusicEchoAddon] Player entered world, triggering VIP auto-claim");
         triggerAutoReceiveVip();
     }
 
-    /**
-     * 执行一次 VIP 领取（领取 + 升级）。
-     * 首发和周期重试都走这里，避免逻辑分叉。
-     * <p>
-     * 注：之前想仿照 EchoMusic 调 getServerNow 拿 server 时区日期，但 /v1/server_now
-     * 是 POST + AES 加密 body（用 GET 方式酷狗返回 20008 参数无效）。在用户本地时区
-     * 已经是 Asia/Shanghai（与 server 端时区一致）的前提下，直接用本地时间即可，
-     * 不会出现跨日错位。{@link KuGouVipApi#toBeijingDateString(long)} 仍提供
-     * +8h 偏移格式化以保证 UTC 客户端也能用。
-     */
     private void triggerAutoReceiveVip() {
         String today = KuGouVipApi.toBeijingDateString(-1L);
         EchoLogger.info("[NetMusicEchoAddon] Auto-receive VIP with date={}", today);
-        // ⚠️ 关键：两个接口的 quota 独立！
-        //   - receiveDailyVip 失败（含 20002）时仍要试 upgradeVipReward
-        //   - upgrade 才是 EchoMusic 能"VIP 状态时续杯"的原因
         KuGouVipApi.receiveDailyVip(EchoConfig.userid, today)
                 .thenAccept(receiveResult -> {
                     EchoLogger.info("[NetMusicEchoAddon] receiveDailyVip result: {}", receiveResult);
-                    // 不论 receive 成功 / 失败 / 20002，都要调 upgrade（quota 独立）
                     KuGouVipApi.upgradeVipReward(EchoConfig.userid)
                             .thenAccept(upgraded ->
                                     EchoLogger.info("[NetMusicEchoAddon] VIP upgrade: {}",
@@ -345,13 +331,6 @@ public class NetMusicEchoAddon {
                 });
     }
 
-    /**
-     * 启动周期重试调度器。
-     * <p>
-     * 行为：每隔 {@link ClientConfig#VIP_RETRY_INTERVAL_MINUTES} 分钟检查一次，
-     * 只有当 {@link KuGouVipApi#shouldRetryToday()} 返回 true 时才真正发出请求。
-     * 成功 / 服务端说今日已领 → 自动空转；网络抖动 / 其他失败 → 下个周期再试。
-     */
     private void startVipRetryScheduler() {
         int minutes = ClientConfig.VIP_RETRY_INTERVAL_MINUTES.get();
         vipScheduler.scheduleAtFixedRate(() -> {
@@ -377,28 +356,19 @@ public class NetMusicEchoAddon {
         }, minutes, minutes, TimeUnit.MINUTES);
     }
 
-    @net.minecraftforge.eventbus.api.SubscribeEvent
-    public void onServerStarted(net.minecraftforge.event.server.ServerStartedEvent event) {
-        // 服务端起来后再启动 URL 续期调度器。
-        // 这样在 ServerLifecycleHooks.getCurrentServer() 里能拿到 server。
+    @SubscribeEvent
+    public void onServerStarted(ServerStartedEvent event) {
         startUrlRefreshScheduler();
     }
 
-    /**
-     * 玩家加入世界时立即给该玩家跑一次扫描。
-     * <p>
-     * 这样不用等 {@link ClientConfig#URL_REFRESH_INTERVAL_HOURS} 小时，第一次失败 CD 也能马上被修。
-     * 单人档受益最大（联机时也是同等的便利，但专用服没凭证时静默跳过）。
-     */
-    @net.minecraftforge.eventbus.api.SubscribeEvent
-    public void onPlayerLoggedIn(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
+    @SubscribeEvent
+    public void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player)) {
             return;
         }
         if (!ClientConfig.URL_REFRESH_ENABLED.get()) {
             return;
         }
-        // 没有登录态就不要浪费一次 HTTP（专用服 + 没有本地凭证的常见情况）
         if (!EchoConfig.isLoggedIn()) {
             return;
         }
@@ -406,7 +376,6 @@ public class NetMusicEchoAddon {
         if (server == null) {
             return;
         }
-        // 放到 server 主线程跑（修改 ItemStack NBT 必须在主线程）
         server.execute(() -> {
             try {
                 com.github.tartaricacid.netmusic.echo.support.UrlRefresher refresher =
@@ -426,8 +395,8 @@ public class NetMusicEchoAddon {
         });
     }
 
-    @net.minecraftforge.eventbus.api.SubscribeEvent
-    public void onServerStopped(net.minecraftforge.event.server.ServerStoppedEvent event) {
+    @SubscribeEvent
+    public void onServerStopped(ServerStoppedEvent event) {
         saveState();
         shutdownVipScheduler();
         shutdownUrlRefreshScheduler();
@@ -435,19 +404,8 @@ public class NetMusicEchoAddon {
         EchoLogger.shutdown();
     }
 
-    /**
-     * 玩家右键方块事件：用于"放 CD 进唱片机"的瞬间同步检查 URL。
-     * <p>
-     * 触发时机：在唱片机真正把 CD 拿走之前。在事件内同步改 held CD 的 NBT 即可生效——
-     * 唱片机随后把改完的 CD 拿走，播放用的就是新 URL。
-     * <p>
-     * 设计目标：用户最常听到的"403 播放失败"在放进去那一刻就被消化掉，零感知。
-     * <p>
-     * 注意：<b>不要</b>cancel 事件，唱片机的标准插入逻辑要继续走。
-     */
-    @net.minecraftforge.eventbus.api.SubscribeEvent
-    public void onRightClickJukebox(net.minecraftforge.event.entity.player.PlayerInteractEvent.RightClickBlock event) {
-        // 只在服务端处理，客户端的右击是预测性的
+    @SubscribeEvent
+    public void onRightClickJukebox(PlayerInteractEvent.RightClickBlock event) {
         if (event.getLevel().isClientSide()) {
             return;
         }
@@ -457,22 +415,17 @@ public class NetMusicEchoAddon {
         if (!EchoConfig.isLoggedIn()) {
             return;
         }
-        // 必须是唱片机
         if (!(event.getLevel().getBlockState(event.getPos()).getBlock()
                 instanceof net.minecraft.world.level.block.JukeboxBlock)) {
             return;
         }
-        // 必须手拿音乐 CD
         ItemStack held = event.getItemStack();
         if (!com.github.tartaricacid.netmusic.echo.support.CdNbtHelper.isMusicCd(held)) {
             return;
         }
-        // 必须有 fileHash 记录（老 CD 没有就跳过，不去尝试）
         if (com.github.tartaricacid.netmusic.echo.support.CdNbtHelper.readOriginalInfo(held).isEmpty()) {
             return;
         }
-        // 唱片机里已经有唱片了：不替换，让用户自己处理
-        // 用 BlockState 的 HAS_RECORD 属性来判断，比 JukeboxBlockEntity 的 getRecord() 在不同映射下更稳
         net.minecraft.world.level.block.state.BlockState jukeboxState =
                 event.getLevel().getBlockState(event.getPos());
         if (jukeboxState.hasProperty(net.minecraft.world.level.block.JukeboxBlock.HAS_RECORD)
@@ -480,7 +433,6 @@ public class NetMusicEchoAddon {
             return;
         }
 
-        // 同步探测 + 续期（HEAD 通常 100-300ms，命中失效才走 getSongUrl，再 1-2s）
         try {
             com.github.tartaricacid.netmusic.echo.support.UrlRefresher refresher =
                     new com.github.tartaricacid.netmusic.echo.support.UrlRefresher();
@@ -490,19 +442,15 @@ public class NetMusicEchoAddon {
                         event.getPos(), event.getEntity().getName().getString());
             }
         } catch (Throwable t) {
-            // 任何异常都吞掉：宁可让播放失败下次再修，也不要因为探测挂了影响唱片机插入
             EchoLogger.warn("[UrlRefresh] On-insert probe failed, letting insert proceed: {}", t.getMessage());
         }
     }
 
-    @net.minecraftforge.eventbus.api.SubscribeEvent
-    public void onServerStopping(net.minecraftforge.event.server.ServerStoppingEvent event) {
+    @SubscribeEvent
+    public void onServerStopping(ServerStoppingEvent event) {
         saveState();
     }
 
-    /**
-     * 关闭周期重试调度器。重复调用安全。
-     */
     private void shutdownVipScheduler() {
         if (vipScheduler != null && !vipScheduler.isShutdown()) {
             vipScheduler.shutdown();
@@ -517,21 +465,7 @@ public class NetMusicEchoAddon {
         }
     }
 
-    /**
-     * 启动 URL 续期调度器。
-     * <p>
-     * 行为：每隔 {@link ClientConfig#URL_REFRESH_INTERVAL_HOURS} 小时，
-     * 把"扫描所有玩家物品栏、检测失效 URL、续期"的任务抛到服务端主线程执行。
-     * <p>
-     * 之所以抛到主线程：{@code ItemStack} 的 NBT 修改必须在 server tick 内做；
-     * 同时 {@code player.getInventory()} 等 API 也要求 server 线程。
-     * HTTP 探测会阻塞主线程若干秒，但因为扫描频率低（默认 4 小时）且一般没有失效 CD，
-     * 实际影响可以忽略。
-     */
     private void startUrlRefreshScheduler() {
-        // 修复重进游戏存档崩溃：上一轮 onServerStopped 已把 urlRefreshScheduler shutdown，
-        // 这里的 executor 已 Terminated，直接 scheduleAtFixedRate 会抛
-        // RejectedExecutionException 炸掉集成服务端。检测到 terminated 就重建。
         if (urlRefreshScheduler.isShutdown()) {
             EchoLogger.info("[NetMusicEchoAddon] UrlRefresh scheduler was terminated (likely world reload); re-creating");
             urlRefreshScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
@@ -547,7 +481,7 @@ public class NetMusicEchoAddon {
                     return;
                 }
                 net.minecraft.server.MinecraftServer server =
-                        net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+                        net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
                 if (server == null) {
                     return;
                 }
@@ -566,9 +500,6 @@ public class NetMusicEchoAddon {
         }, hours, hours, TimeUnit.HOURS);
     }
 
-    /**
-     * 关闭 URL 续期调度器。重复调用安全。
-     */
     private void shutdownUrlRefreshScheduler() {
         if (urlRefreshScheduler != null && !urlRefreshScheduler.isShutdown()) {
             urlRefreshScheduler.shutdown();
@@ -583,13 +514,6 @@ public class NetMusicEchoAddon {
         }
     }
 
-    /**
-     * 从 JSON 文件加载登录状态（运行时凭证）
-     * <p>
-     * 读取顺序：先尝试新路径 {@link #STATE_FILE}（config/），若不存在再尝试
-     * 旧路径 {@link #LEGACY_STATE_FILE}（游戏根目录）。从旧路径读到的内容会
-     * 立刻写入新路径并删除旧文件，做到一次性的透明迁移。
-     */
     public static void loadState() {
         Path source = null;
         if (Files.exists(STATE_FILE)) {
@@ -622,7 +546,6 @@ public class NetMusicEchoAddon {
             }
             EchoLogger.info("Login state loaded. Logged in: {}", EchoConfig.isLoggedIn());
 
-            // 如果是从旧路径加载的，立刻把内容搬到新路径并删掉旧文件
             if (source == LEGACY_STATE_FILE) {
                 try {
                     Path parent = STATE_FILE.getParent();
@@ -642,9 +565,6 @@ public class NetMusicEchoAddon {
         }
     }
 
-    /**
-     * 将运行时登录凭证保存到 JSON 文件
-     */
     public static void saveState() {
         try {
             Files.createDirectories(CONFIG_DIR);
