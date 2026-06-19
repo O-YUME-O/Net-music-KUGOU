@@ -1,0 +1,12 @@
+
+{
+  "itemGroup.netmusic_echo_addon": "网易音乐扩展",
+  "block.netmusic_echo_addon.echo_searcher": "音乐搜索器",
+  "block.netmusic_echo_addon.echo_searcher.desc": "搜索并刻录音乐到 CD",
+  "gui.netmusic_echo_addon.search": "搜索",
+  "gui.netmusic_echo_addon.burn": "刻录",
+  "gui.netmusic_echo_addon.searching": "正在搜索...",
+  "gui.netmusic_echo_addon.burning": "正在刻录...",
+  "gui.netmusic_echo_addon.no_selection": "请先选择一首歌曲",
+  "gui.netmusic_echo_addon.no_url": "无法获取歌曲播放链接"
+}

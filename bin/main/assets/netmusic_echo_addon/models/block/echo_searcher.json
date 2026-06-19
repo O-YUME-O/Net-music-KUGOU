@@ -1,0 +1,13 @@
+
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "particle": "netmusic_echo_addon:block/echo_searcher",
+    "down": "netmusic_echo_addon:block/echo_searcher",
+    "up": "netmusic_echo_addon:block/echo_searcher",
+    "north": "netmusic_echo_addon:block/echo_searcher",
+    "south": "netmusic_echo_addon:block/echo_searcher",
+    "west": "netmusic_echo_addon:block/echo_searcher",
+    "east": "netmusic_echo_addon:block/echo_searcher"
+  }
+}
