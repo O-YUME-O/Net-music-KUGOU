@@ -2,10 +2,22 @@
 pluginManagement {
     repositories {
         gradlePluginPortal()
+        // 国内镜像（优先）
+        maven { url = 'https://mirrors4.qlu.edu.cn/bmclapi/' }
         maven { url = 'https://maven.neoforged.net/releases' }
     }
 }
 
 plugins {
-    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+    // 已使用 org.gradle.java.home 指向本地 JDK 21，不需要 foojay 自动下载
+    // id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
+    repositories {
+        maven { url = 'https://mirrors4.qlu.edu.cn/bmclapi/' }
+        maven { url = 'https://maven.neoforged.net/releases' }
+        mavenCentral()
+    }
 }
