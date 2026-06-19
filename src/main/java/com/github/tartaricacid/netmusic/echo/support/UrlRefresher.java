@@ -1,14 +1,13 @@
 package com.github.tartaricacid.netmusic.echo.support;
 
 import com.github.tartaricacid.netmusic.echo.EchoLogger;
-import com.github.tartaricacid.netmusic.echo.NetMusicEchoAddon;
 import com.github.tartaricacid.netmusic.echo.api.KuGouApiClient;
 import com.github.tartaricacid.netmusic.echo.config.ClientConfig;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
-import net.minecraftforge.server.ServerLifecycleHooks;
+import net.neoforged.neoforge.server.ServerLifecycleHooks;
 
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
@@ -18,7 +17,6 @@ import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.cert.X509Certificate;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -97,11 +95,11 @@ public class UrlRefresher {
      * @return true 表示成功续期了 URL
      */
     public boolean tryRefreshOne(ItemStack cd) {
-        Optional<CdNbtHelper.OriginalInfo> infoOpt = CdNbtHelper.readOriginalInfo(cd);
+        var infoOpt = CdNbtHelper.readOriginalInfo(cd);
         if (infoOpt.isEmpty()) {
             return false;
         }
-        CdNbtHelper.OriginalInfo info = infoOpt.get();
+        CdAddonData info = infoOpt.get();
         String currentUrl = CdNbtHelper.readSongUrl(cd);
         if (currentUrl == null || currentUrl.isEmpty()) {
             return false;
@@ -110,26 +108,28 @@ public class UrlRefresher {
             return false;
         }
         EchoLogger.info("[UrlRefresher] CD URL expired, refreshing: hash={}, oldUrl={}",
-                info.fileHash, currentUrl);
+                info.fileHash(), currentUrl);
         try {
-            String newUrl = KuGouApiClient.getSongUrl(info.fileHash,
-                    info.albumId == null ? "" : info.albumId).get();
+            String newUrl = KuGouApiClient.getSongUrl(info.fileHash(),
+                    info.albumId() == null ? "" : info.albumId()).get();
             if (newUrl == null || newUrl.isEmpty()) {
-                EchoLogger.warn("[UrlRefresher] Failed to fetch new URL for hash={} (KuGou returned empty)", info.fileHash);
+                EchoLogger.warn("[UrlRefresher] Failed to fetch new URL for hash={} (KuGou returned empty)", info.fileHash());
                 return false;
             }
             if (newUrl.equals(currentUrl)) {
-                EchoLogger.info("[UrlRefresher] KuGou returned the same URL for hash={} (likely also expired). Will retry next round.", info.fileHash);
+                EchoLogger.info("[UrlRefresher] KuGou returned the same URL for hash={} (likely also expired). Will retry next round.", info.fileHash());
                 return false;
             }
             CdNbtHelper.updateSongUrl(cd, newUrl);
             // 重置刻录时间，方便下次巡检识别"刚续期过"
-            cd.getOrCreateTag().putLong(CdNbtHelper.NBT_BURN_TIMESTAMP, System.currentTimeMillis());
-            EchoLogger.info("[UrlRefresher] CD URL refreshed: hash={} -> newUrl={}", info.fileHash, newUrl);
+            CdNbtHelper.updateData(cd, d -> new CdAddonData(
+                    d.fileHash(), d.albumId(), System.currentTimeMillis(), d.lrc(), d.lrcTrans()
+            ));
+            EchoLogger.info("[UrlRefresher] CD URL refreshed: hash={} -> newUrl={}", info.fileHash(), newUrl);
             return true;
         } catch (Exception e) {
             EchoLogger.error("[UrlRefresher] Exception while refreshing hash={}: {}",
-                    info.fileHash, e.getMessage(), e);
+                    info.fileHash(), e.getMessage(), e);
             return false;
         }
     }

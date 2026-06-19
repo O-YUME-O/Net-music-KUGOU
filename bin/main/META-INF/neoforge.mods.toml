@@ -1,0 +1,49 @@
+
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "MIT"
+
+[[mods]]
+modId = "netmusic_echo_addon"
+version = "${version}"
+displayName = "NetMusic Echo Addon"
+authors = "O-YUME-O"
+description = "A NetMusic addon with Echo/KuGou music support, multi-language lyrics display, and URL auto-refresh"
+
+[[mixins]]
+config = "netmusic_echo_addon.mixins.json"
+
+[[dependencies.netmusic_echo_addon]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.netmusic_echo_addon]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.22)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.netmusic_echo_addon]]
+modId = "netmusic"
+type = "required"
+versionRange = "[1.5.0,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.netmusic_echo_addon]]
+modId = "touhou_little_maid"
+type = "optional"
+versionRange = "[1.5.0,)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies.netmusic_echo_addon]]
+modId = "cloth_config"
+type = "required"
+versionRange = "[15.0,)"
+ordering = "NONE"
+side = "CLIENT"
