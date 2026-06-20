@@ -2,7 +2,7 @@ package com.github.tartaricacid.netmusic.echo.support;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
-import io.netty.buffer.ByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 
@@ -37,7 +37,7 @@ public record CdAddonData(
             Codec.STRING.optionalFieldOf("lrc_trans", "").forGetter(CdAddonData::lrcTrans)
     ).apply(instance, CdAddonData::new));
 
-    public static final StreamCodec<ByteBuf, CdAddonData> STREAM_CODEC = StreamCodec.composite(
+    public static final StreamCodec<RegistryFriendlyByteBuf, CdAddonData> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.STRING_UTF8, CdAddonData::fileHash,
             ByteBufCodecs.STRING_UTF8, CdAddonData::albumId,
             ByteBufCodecs.VAR_LONG, CdAddonData::burnTime,

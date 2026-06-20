@@ -53,13 +53,13 @@ public abstract class CDBurnerMenuScreenMixin extends AbstractContainerScreen<Ab
         super(menu, inventory, title);
     }
 
-    @Inject(method = "init", at = @At("TAIL"), require = 0, remap = true)
+    @Inject(method = "init", at = @At("TAIL"), require = 0, remap = false)
     private void netmusicecho$init(CallbackInfo ci) {
         EchoLogger.info("=========== ECHO ADDON MIXIN CALLED! ===========");
         netmusicecho$initCommon();
     }
 
-    @Inject(method = "resize", at = @At("TAIL"), require = 0, remap = true)
+    @Inject(method = "resize", at = @At("TAIL"), require = 0, remap = false)
     private void netmusicecho$resize(Minecraft minecraft, int width, int height, CallbackInfo ci) {
         netmusicecho$updateSearchUi();
     }
@@ -164,7 +164,7 @@ public abstract class CDBurnerMenuScreenMixin extends AbstractContainerScreen<Ab
         songInfo.artists = Lists.newArrayList(result.singerName);
         songInfo.readOnly = this.readOnlyButton != null && this.readOnlyButton.selected();
 
-        NetworkHandler.CHANNEL.sendToServer(new SetMusicIDMessage(songInfo));
+        NetworkHandler.sendToServer(new SetMusicIDMessage(songInfo));
         // 把 fileHash / albumId 写入静态缓存，供服务端 CDBurnerMenuMixin 读取。
         // （集成服务器模式下客户端/服务端共享 JVM，静态变量可传递数据）
         BurnDataCache.set(result.fileHash, result.albumId);

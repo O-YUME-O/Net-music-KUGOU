@@ -16,7 +16,6 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderDispatcher;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.ComponentContents;
 import net.minecraft.network.chat.MutableComponent;
 import org.apache.commons.lang3.StringUtils;
 import org.spongepowered.asm.mixin.Mixin;
@@ -176,7 +175,7 @@ public abstract class MusicPlayerRendererMixin {
         float opacity = Minecraft.getInstance().options.getBackgroundOpacity(0.25F);
         int bgColor = (int) (opacity * 255.0F) << 24;
 
-        if (!currentLine.getContents().equals(ComponentContents.EMPTY)) {
+        if (currentLine != null && currentLine != Component.empty()) {
             float currentLineWidth = (float) (-this.font.width(currentLine) / 2);
             this.font.drawInBatch(currentLine, currentLineWidth, -y, currentColor, false,
                     poseStack.last().pose(), bufferIn, Font.DisplayMode.NORMAL,

@@ -3,6 +3,7 @@ package com.github.tartaricacid.netmusic.echo;
 import com.github.tartaricacid.netmusic.echo.api.KuGouApiClient;
 import com.github.tartaricacid.netmusic.echo.api.KuGouLoginApi;
 import com.github.tartaricacid.netmusic.echo.api.KuGouVipApi;
+import com.github.tartaricacid.netmusic.echo.block.InitBlockEntities;
 import com.github.tartaricacid.netmusic.echo.client.gui.EchoLoginScreen;
 import com.github.tartaricacid.netmusic.echo.config.AudioQuality;
 import com.github.tartaricacid.netmusic.echo.config.ButtonEntry;
@@ -30,10 +31,9 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.neoforged.fml.javafmlmod.FMLJavaModLoadingContext;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.loading.FMLPaths;
-import net.neoforged.neoforge.client.ConfigScreenHandler;
+import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
@@ -110,6 +110,7 @@ public class NetMusicEchoAddon {
         InitItems.init(modEventBus);
         InitContainer.init(modEventBus);
         InitDataComponent.DATA_COMPONENT_TYPES.register(modEventBus);
+        InitBlockEntities.init(modEventBus);
 
         // 网络包注册（1.21.1 通过 RegisterPayloadHandlersEvent）
         modEventBus.addListener(NetworkHandler::register);
@@ -121,8 +122,9 @@ public class NetMusicEchoAddon {
         NeoForge.EVENT_BUS.register(this);
 
         if (FMLEnvironment.dist.isClient() && ModList.get().isLoaded("cloth_config")) {
-            modContainer.registerExtensionPoint(ConfigScreenHandler.ConfigScreenFactory.class,
-                    () -> new ConfigScreenHandler.ConfigScreenFactory(this::createConfigScreen));
+            modContainer.registerExtensionPoint(IConfigScreenFactory.class,
+                    (java.util.function.Supplier<IConfigScreenFactory>) () ->
+                            (mc, parent) -> createConfigScreen(net.minecraft.client.Minecraft.getInstance(), parent));
             EchoLogger.info("EchoConfig screen registered with ClothConfig!");
         }
 
