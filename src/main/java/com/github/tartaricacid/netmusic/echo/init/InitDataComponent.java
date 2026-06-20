@@ -3,7 +3,7 @@ package com.github.tartaricacid.netmusic.echo.init;
 import com.github.tartaricacid.netmusic.echo.NetMusicEchoAddon;
 import com.github.tartaricacid.netmusic.echo.support.CdAddonData;
 import net.minecraft.core.component.DataComponentType;
-import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
@@ -18,8 +18,8 @@ import net.neoforged.neoforge.registries.DeferredRegister;
  */
 public class InitDataComponent {
     public static final DeferredRegister.DataComponents DATA_COMPONENT_TYPES =
-            DeferredRegister.DataComponents.createDataComponents(
-                    BuiltInRegistries.DATA_COMPONENT_TYPE, NetMusicEchoAddon.MOD_ID);
+            DeferredRegister.createDataComponents(
+                    Registries.DATA_COMPONENT_TYPE, NetMusicEchoAddon.MOD_ID);
 
     /**
      * CD 附加数据组件

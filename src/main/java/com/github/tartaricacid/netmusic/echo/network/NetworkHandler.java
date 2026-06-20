@@ -25,9 +25,12 @@ public class NetworkHandler {
     public static void register(RegisterPayloadHandlersEvent event) {
         PayloadRegistrar registrar = event.registrar(NetMusicEchoAddon.MOD_ID)
                 .versioned(PROTOCOL_VERSION);
-        registrar.play(EchoSearchMessage.TYPE, EchoSearchMessage.STREAM_CODEC, EchoSearchMessage::handle);
-        registrar.play(EchoBurnMessage.TYPE, EchoBurnMessage.STREAM_CODEC, EchoBurnMessage::handle);
-        registrar.play(AddCdRefreshInfoMessage.TYPE, AddCdRefreshInfoMessage.STREAM_CODEC, AddCdRefreshInfoMessage::handle);
+        // EchoSearchMessage：客户端发起搜索 + 服务端回传结果（双向）
+        registrar.playBidirectional(EchoSearchMessage.TYPE, EchoSearchMessage.STREAM_CODEC, EchoSearchMessage::handle);
+        // EchoBurnMessage：客户端 → 服务端（烧录）
+        registrar.playToServer(EchoBurnMessage.TYPE, EchoBurnMessage.STREAM_CODEC, EchoBurnMessage::handle);
+        // AddCdRefreshInfoMessage：客户端 → 服务端（写 fileHash/albumId 到 CD）
+        registrar.playToServer(AddCdRefreshInfoMessage.TYPE, AddCdRefreshInfoMessage.STREAM_CODEC, AddCdRefreshInfoMessage::handle);
         EchoLogger.info("Network Handler initialized!");
     }
 
@@ -35,13 +38,13 @@ public class NetworkHandler {
      * 把 payload 发给指定服务端玩家（player → server 端使用）。
      */
     public static void sendToPlayer(ServerPlayer player, CustomPacketPayload payload) {
-        PacketDistributor.PLAYER.with(player).send(payload);
+        PacketDistributor.sendToPlayer(player, payload);
     }
 
     /**
      * 把 payload 发到服务端（client 端使用）。
      */
     public static void sendToServer(CustomPacketPayload payload) {
-        PacketDistributor.SERVER.noArg().send(payload);
+        PacketDistributor.sendToServer(payload);
     }
 }

@@ -20,7 +20,7 @@ import net.minecraft.world.entity.player.Inventory;
 import org.apache.commons.lang3.StringUtils;
 
 public class EchoSearcherScreen extends AbstractContainerScreen<EchoSearcherMenu> {
-    private static final ResourceLocation BG = new ResourceLocation(NetMusic.MOD_ID, "textures/gui/cd_burner.png");
+    private static final ResourceLocation BG = ResourceLocation.fromNamespaceAndPath(NetMusic.MOD_ID, "textures/gui/cd_burner.png");
     private static final int RESULTS_PER_PAGE = 5;
     private EditBox searchBox;
     private Component tips = Component.empty();
@@ -112,7 +112,7 @@ public class EchoSearcherScreen extends AbstractContainerScreen<EchoSearcherMenu
 
     @Override
     protected void renderBg(GuiGraphics graphics, float partialTick, int mouseX, int mouseY) {
-        renderBackground(graphics);
+        renderBackground(graphics, mouseX, mouseY, partialTick);
         int posX = this.leftPos;
         int posY = (this.height - this.imageHeight) / 2;
         graphics.blit(BG, posX, posY, 0, 0, this.imageWidth, this.imageHeight);

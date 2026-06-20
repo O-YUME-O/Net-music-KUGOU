@@ -1,8 +1,74 @@
-reference/
+# Build artifacts
 build/
-.gradle/
-*.log
-*.log.*
-*.iml
-.idea/
+bin/
 out/
+.gradle/
+.vs/
+.idea/
+*.iml
+*.class
+*.jar
+!libs/*.jar
+
+# Logs / diagnostics (any depth)
+*.log
+*.log.txt
+
+# NFRT / migration temp dirs
+tmp-extract/
+moddev-extract/
+moddev-extract2/
+test-neoform.zip
+nayuki_src.zip
+netmusic-src-tmp/
+reference/
+
+# Diagnostic logs / scripts
+build_*.txt
+build_err.txt
+build_output*.txt
+check-*.ps1
+download-deps.ps1
+dump-*.txt
+dump_*.txt
+dump_*.gradle
+find-*.ps1
+inspect-*.ps1
+inspect-*.out.txt
+modmodel-decompile.txt
+runmodel-decompile.txt
+neoforgeext-decompile.txt
+repos-internal.txt
+setup-mirror.ps1
+test-download.ps1
+CreateMinecraftArtifactsTask.javap.txt
+NeoFormRuntimeTask.javap.c.txt
+NeoFormRuntimeTask.javap.txt
+.eclipse/
+
+# Java Decompiler temp files
+BlockMusicParent.class
+Init22.class
+InitBlocksNew.class
+ParentInitBlocks.class
+ParentMP.class
+ParentMP2.class
+NeoFormRuntimeTask.class
+brr.class
+cpo.class
+dca_d.class
+eiu*.class
+probe*.class
+props_*.class
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.classpath
+.project
+.settings/
+nbproject/
+nbbuild/
+nbdist/

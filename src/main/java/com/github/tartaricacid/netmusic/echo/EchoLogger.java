@@ -1,6 +1,6 @@
 package com.github.tartaricacid.netmusic.echo;
 
-import net.minecraftforge.fml.loading.FMLPaths;
+import net.neoforged.fml.loading.FMLPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

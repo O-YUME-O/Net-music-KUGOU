@@ -1,10 +1,11 @@
 
 pluginManagement {
     repositories {
+        // 本地镜像必须最前（包含 neoform-runtime 的 .module 文件）
+        maven { url = 'file:/F:/minecraft%20mods/local-mirror/' }
         gradlePluginPortal()
         // 国内镜像（优先）
         maven { url = 'https://mirrors4.qlu.edu.cn/bmclapi/' }
-        maven { url = 'https://maven.neoforged.net/releases' }
     }
 }
 
@@ -14,10 +15,13 @@ plugins {
 }
 
 dependencyResolutionManagement {
+    // PREFER_PROJECT: 项目 repositories 优先；settings 仅作兜底
     repositoriesMode.set(RepositoriesMode.PREFER_PROJECT)
     repositories {
+        // 本地镜像（.module 文件所在）
+        maven { url = 'file:/F:/minecraft%20mods/local-mirror/' }
+        // 国内镜像
         maven { url = 'https://mirrors4.qlu.edu.cn/bmclapi/' }
-        maven { url = 'https://maven.neoforged.net/releases' }
         mavenCentral()
     }
 }

@@ -7,7 +7,6 @@ import com.github.tartaricacid.netmusic.echo.echo.EchoMusicApi;
 import com.github.tartaricacid.netmusic.echo.inventory.EchoSearcherMenu;
 import com.github.tartaricacid.netmusic.echo.client.gui.EchoSearchScreen;
 import com.github.tartaricacid.netmusic.echo.network.NetworkHandler;
-import io.netty.buffer.ByteBuf;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
@@ -44,7 +43,7 @@ public record EchoSearchMessage(
      * 单条 {@link EchoSearcherMenu.SearchResult} 的编解码器。
      * 7 个字段全部为 String/INT，逐个写最直观，避免 NBT 开销。
      */
-    public static final StreamCodec<ByteBuf, EchoSearcherMenu.SearchResult> SEARCH_RESULT_CODEC =
+    public static final StreamCodec<RegistryFriendlyByteBuf, EchoSearcherMenu.SearchResult> SEARCH_RESULT_CODEC =
             StreamCodec.of(
                     (buf, r) -> {
                         ByteBufCodecs.STRING_UTF8.encode(buf, r.songName);
@@ -68,7 +67,7 @@ public record EchoSearchMessage(
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     public static final StreamCodec<RegistryFriendlyByteBuf, List<EchoSearcherMenu.SearchResult>> SEARCH_RESULT_LIST_CODEC =
-            (StreamCodec) ByteBufCodecs.list(SEARCH_RESULT_CODEC);
+            SEARCH_RESULT_CODEC.apply(ByteBufCodecs.list());
 
     public static final StreamCodec<RegistryFriendlyByteBuf, EchoSearchMessage> STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.STRING_UTF8, EchoSearchMessage::keyword,

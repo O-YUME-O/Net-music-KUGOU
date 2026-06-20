@@ -94,15 +94,8 @@ public class EchoSearchScreen extends Screen {
     }
 
     @Override
-    public void tick() {
-        if (this.searchBox != null) {
-            this.searchBox.tick();
-        }
-    }
-
-    @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics);
+        this.renderBackground(graphics, mouseX, mouseY, partialTick);
 
         // ⚠️ 列表顶部必须在搜索框下方，避免与搜索栏重叠
         // 搜索框位于 y=24, 高度20px → 搜索框底部约 y=44, 加上间距后列表从 y=52 开始
